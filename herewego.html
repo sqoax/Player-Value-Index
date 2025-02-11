@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PGA PVI Tracker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.3/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0a192f;
+            color: #ffffff;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 {
+            margin-bottom: 20px;
+        }
+        select {
+            padding: 10px;
+            margin: 10px;
+            border-radius: 5px;
+            border: none;
+        }
+        table {
+            width: 80%;
+            margin: 20px auto;
+            border-collapse: collapse;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        th {
+            background-color: #112240;
+            color: #64ffda;
+            text-transform: uppercase;
+        }
+        tr:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .chart-container {
+            width: 90%;
+            overflow-x: auto;
+            margin: 20px auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        canvas {
+            min-width: 1200px;
+        }
+    </style>
+</head>
+<body>
+    <h2>PGA PVI Tracker</h2>
+    <label for="sortSelect">Sort By:</label>
+    <select id="sortSelect">
+        <option value="events">Events Played (Highest First)</option>
+        <option value="total">Total PVI (Highest First)</option>
+        <option value="avg">AVG PVI (Highest First)</option>
+    </select>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Events Played</th>
+                <th>Total PVI</th>
+                <th>AVG PVI</th>
+            </tr>
+        </thead>
+        <tbody id="pviTableBody"></tbody>
+    </table>
+    
+    <div class="chart-container">
+        <canvas id="pviChart"></canvas>
+    </div>
+    
+    <script>
+        const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRSxyXbPz_1f5kN2BTuc6t15XRs5PhoVl38kQF63qx90467wWHmmR6HxQMXjaXLn1pCxWeNUd-G7_JZ/pub?output=csv';
+        
+        function fetchData() {
+            fetch(sheetUrl)
+                .then(response => response.text())
+                .then(csvData => {
+                    let rows = csvData.split('\n').map(row => row.split(','));
+                    let players = {};
+                    for (let col = 0; col < rows[0].length; col += 3) {
+                        for (let row = 1; row < rows.length; row++) {
+                            let player = rows[row][col];
+                            let pvi = rows[row][col + 1];
+                            
+                            if (player && pvi && !isNaN(pvi)) {
+                                if (!players[player]) {
+                                    players[player] = { events: 0, totalPVI: 0 };
+                                }
+                                players[player].events += 1;
+                                players[player].totalPVI += parseFloat(pvi);
+                            }
+                        }
+                    }
+                    let playerArray = Object.keys(players).map(player => ({
+                        name: player,
+                        events: players[player].events,
+                        total: players[player].totalPVI,
+                        avg: players[player].totalPVI / players[player].events
+                    }));
+                    updateTable('events', playerArray);
+                });
+        }
+        
+        function updateTable(sortBy, playerArray) {
+            playerArray.sort((a, b) => b[sortBy] - a[sortBy]);
+            let tbody = document.getElementById('pviTableBody');
+            tbody.innerHTML = '';
+            playerArray.forEach((player, index) => {
+                let row = `<tr>
+                    <td>${index + 1}</td>
+                    <td>${player.name}</td>
+                    <td>${player.events}</td>
+                    <td>${player.total.toFixed(3)}</td>
+                    <td>${player.avg.toFixed(3)}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+            updateChart(playerArray);
+        }
+        
+        function updateChart(playerArray) {
+            let ctx = document.getElementById('pviChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: playerArray.map(p => p.name),
+                    datasets: [{
+                        label: 'Total PVI',
+                        data: playerArray.map(p => p.total),
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)'
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { ticks: { display: false } },
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+        
+        document.getElementById('sortSelect').addEventListener('change', function() {
+            fetchData();
+        });
+        
+        fetchData();
+    </script>
+</body>
+</html>
